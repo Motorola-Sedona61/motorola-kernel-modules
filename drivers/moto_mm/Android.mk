@@ -10,3 +10,5 @@ KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
+include $(call first-makefiles-under,$(LOCAL_PATH))
+
