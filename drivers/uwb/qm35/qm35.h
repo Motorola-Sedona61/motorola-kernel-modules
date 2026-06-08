@@ -76,6 +76,9 @@ struct qm35_ctx {
 	struct wait_queue_head qmrom_wq_ready;
 	bool qmrom_qm_ready;
 	bool flashing;
+
+	struct clk *clk;
+	bool clk_enabled;
 };
 
 static inline unsigned int qm35_get_state(struct qm35_ctx *qm35_hdl)

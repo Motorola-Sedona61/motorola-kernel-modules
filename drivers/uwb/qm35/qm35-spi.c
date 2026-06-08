@@ -1113,6 +1113,7 @@ static int qm35_probe(struct spi_device *spi)
 	struct miscdevice *coredump_misc;
 #endif
 	struct clk *uwb_clk;
+	bool uwb_clk_enabled = false;
 	int ret = 0;
 
 	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
@@ -1156,6 +1157,8 @@ static int qm35_probe(struct spi_device *spi)
 		ret = clk_prepare_enable(uwb_clk);
 		if(ret)
 			dev_err(&qm35_ctx->spi->dev, "%s: uwb_clk enable failed", __func__);
+		else
+			uwb_clk_enabled = true;
 	}
 
 	qm35_ctx->gpio_csn = devm_gpiod_get_optional(&spi->dev, "csn",
@@ -1293,6 +1296,11 @@ static int qm35_probe(struct spi_device *spi)
 #endif
 	}
 
+	if (uwb_clk_enabled) {
+		qm35_ctx->clk_enabled = true;
+		qm35_ctx->clk = uwb_clk;
+	}
+
 	dev_info(&spi->dev, "Registered: [%s] misc device\n", uci_misc->name);
 
 	dev_info(&spi->dev, "QM35 spi driver version " DRV_VERSION " probed\n");
@@ -1368,11 +1376,37 @@ static void qm35_remove(struct spi_device *spi)
 }
 
 #ifdef CONFIG_PM_SLEEP
+static void qm35_spi_clock_control(struct qm35_ctx *qm35_hdl, bool enable)
+{
+	struct spi_device *spi = qm35_hdl->spi;
+
+	if (qm35_hdl->clk) {
+		if (enable) {
+			if (!qm35_hdl->clk_enabled) {
+				int ret = clk_prepare_enable(qm35_hdl->clk);
+				if (ret)
+					dev_err(&spi->dev, "%s: uwb clock enable failed", __func__);
+				else {
+					qm35_hdl->clk_enabled = true;
+					dev_info(&spi->dev, "%s: uwb clock enabled\n", __func__);
+				}
+			}
+		} else {
+			if (qm35_hdl->clk_enabled) {
+				clk_disable_unprepare(qm35_hdl->clk);
+				qm35_hdl->clk_enabled = false;
+				dev_info(&spi->dev, "%s: uwb clock disabled\n", __func__);
+			}
+		}
+	}
+}
+
 static int qm35_pm_suspend(struct device *dev)
 {
 	struct qm35_ctx *qm35_hdl = dev_get_drvdata(dev);
 
 	qm35_hsspi_stop(qm35_hdl);
+	qm35_spi_clock_control(qm35_hdl, false);
 
 	return 0;
 }
@@ -1382,6 +1416,7 @@ static int qm35_pm_resume(struct device *dev)
 	struct qm35_ctx *qm35_hdl = dev_get_drvdata(dev);
 
 	qm35_hsspi_start(qm35_hdl);
+	qm35_spi_clock_control(qm35_hdl, true);
 
 	return 0;
 }
