@@ -656,6 +656,10 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 
 	task_rq_unlock(rq, owner, &flags);
 
+	/* Skip immediate resched here so wake_up_q can complete before preemption. */
+	if (lock_name && strcmp(lock_name, "rwsem_wake_finish") == 0)
+		return true;
+
 	return resched_task(owner, false);
 }
 
