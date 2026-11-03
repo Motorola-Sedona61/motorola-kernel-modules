@@ -1737,7 +1737,7 @@ FREE_PMIC:
  * \param client Pointer to i2c_client struct
  * \return Value 0
  */
-static int sx937x_remove(struct i2c_client *client)
+static void sx937x_remove(struct i2c_client *client)
 {
 	psx937x_platform_data_t pplatData =0;
 	psx937x_t pDevice = 0;
@@ -1775,7 +1775,7 @@ static int sx937x_remove(struct i2c_client *client)
 			}
 		}
 	}
-	return 0;
+	return;
 }
 
 

@@ -18,6 +18,8 @@
 #include <asm/setup.h>
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
+#include <linux/err.h>
+#include <linux/workqueue.h>
 #include <asm/system_misc.h>
 #include "mmi_info.h"
 
@@ -131,12 +133,24 @@ static int mmi_unit_smem_setup(void)
 		mui_copy->powerup_reason);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
-	if(!qcom_smem_alloc(QCOM_SMEM_HOST_ANY,
-		SMEM_KERNEL_RESERVE,
-		SMEM_KERNEL_RESERVE_SIZE))
-		mui = qcom_smem_get(QCOM_SMEM_HOST_ANY,
-			SMEM_KERNEL_RESERVE,
-			&mui_size);
+	/*
+	 * Built in, this can run before qcom_smem has probed: report
+	 * -EPROBE_DEFER so the caller retries. An item that already exists
+	 * (-EEXIST) is reused, and qcom_smem_get() errors are ERR_PTRs.
+	 */
+	ret = qcom_smem_alloc(QCOM_SMEM_HOST_ANY, SMEM_KERNEL_RESERVE,
+			      SMEM_KERNEL_RESERVE_SIZE);
+	if (ret == -EPROBE_DEFER)
+		goto err_free;
+	ret = 0;
+	mui = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_KERNEL_RESERVE,
+			    &mui_size);
+	if (IS_ERR(mui)) {
+		ret = PTR_ERR(mui) == -EPROBE_DEFER ? -EPROBE_DEFER : 0;
+		mui = NULL;
+		if (ret)
+			goto err_free;
+	}
 
 	if (!mui || mui_size != SMEM_KERNEL_RESERVE_SIZE) {
 #else
@@ -156,6 +170,8 @@ static int mmi_unit_smem_setup(void)
 	}
 
 	memcpy(mui, mui_copy, SMEM_KERNEL_RESERVE_SIZE);
+	pr_info("mmi_unit_info: SMEM item %d written for modem\n",
+		SMEM_KERNEL_RESERVE);
 
 err_free:
 	kfree(mui_copy);
@@ -184,10 +200,30 @@ static const struct file_operations unitinfo_operations = {
 };
 #endif
 
+static int mmi_unit_smem_tries;
+
+static void mmi_unit_smem_retry(struct work_struct *work);
+static DECLARE_DELAYED_WORK(mmi_unit_smem_work, mmi_unit_smem_retry);
+
+static void mmi_unit_smem_retry(struct work_struct *work)
+{
+	if (mmi_unit_smem_setup() != -EPROBE_DEFER)
+		return;
+	if (++mmi_unit_smem_tries < 100)
+		schedule_delayed_work(&mmi_unit_smem_work,
+				      msecs_to_jiffies(100));
+	else
+		pr_err("mmi_unit_info: SMEM never became available\n");
+}
+
 int mmi_unit_info_init(void)
 {
 	mmi_bootarg_setup();
-	mmi_unit_smem_setup();
+	if (mmi_unit_smem_setup() == -EPROBE_DEFER) {
+		pr_info("mmi_unit_info: SMEM not ready, retrying\n");
+		schedule_delayed_work(&mmi_unit_smem_work,
+				      msecs_to_jiffies(100));
+	}
 
 	/* /proc/unitinfo */
 	unitinfo_procfs_file = proc_create("unitinfo",
@@ -198,6 +234,7 @@ int mmi_unit_info_init(void)
 
 void mmi_unit_info_exit(void)
 {
+	cancel_delayed_work_sync(&mmi_unit_smem_work);
 	if (unitinfo_procfs_file)
 		remove_proc_entry("unitinfo", NULL);
 }

@@ -16,3 +16,8 @@ KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../sensors/$(GKI_OBJ_MO
 obj-m := awinic_sar.o
 awinic_sar-objs := ./comm/aw_sar_comm_interface.o aw_sar.o ./aw9610x/aw9610x.o ./aw9620x/aw9620x.o ./aw9620x/aw_update_fw.o ./aw963xx/aw963xx.o
 
+
+# Out-of-tree fogos build: no ANDROID_BUILD_TOP layout.
+EXTRA_CFLAGS += -I$(src)/../../../../include -I$(src)/../../../../include/linux/input/awinic -I$(srctree)/drivers/base
+# aw963xx_update_firmware keeps a 2.2 KiB frame (vendor code).
+ccflags-y += -Wno-error=frame-larger-than

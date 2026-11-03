@@ -950,9 +950,9 @@ err_free_cts_data:
 }
 
 #ifdef CONFIG_CTS_I2C_HOST
-static int cts_driver_remove(struct i2c_client *client)
+static void cts_driver_remove(struct i2c_client *client)
 #else
-static int cts_driver_remove(struct spi_device *client)
+static void cts_driver_remove(struct spi_device *client)
 #endif
 {
     struct chipone_ts_data *cts_data;
@@ -1020,10 +1020,10 @@ static int cts_driver_remove(struct spi_device *client)
         kfree(cts_data);
     } else {
         cts_warn("Chipone i2c driver remove while NULL chipone_ts_data");
-        return -EINVAL;
+        return;
     }
 
-    return ret;
+
 }
 
 #ifdef CONFIG_CTS_PM_LEGACY

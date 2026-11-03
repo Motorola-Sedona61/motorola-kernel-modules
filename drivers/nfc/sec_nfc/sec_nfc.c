@@ -365,14 +365,15 @@ int sec_nfc_i2c_probe(struct i2c_client *client)
 		IRQF_TRIGGER_RISING | IRQF_ONESHOT, SEC_NFC_DRIVER_NAME, info);
 	if (ret < 0) {
 		pr_err("failed to register IRQ handler\n");
-		kfree(info->i2c_info.buf);
-		return ret;
+		gpio_free(pdata->irq);
+		goto err_irq_req;
 	}
 
 	pr_info("%s success\n", __func__);
 	return 0;
 
 err_irq_req:
+	kfree(info->i2c_info.buf);
 	return ret;
 }
 
@@ -952,7 +953,7 @@ static int __sec_nfc_probe(struct device *dev)
 		if (!info->clkctrl) {
 			dev_err(dev, "cannot remap nfc clock register\n");
 			ret = -ENXIO;
-			goto err_iomap;
+			goto err_gpio_ven;
         }
     }
 #endif
@@ -960,7 +961,7 @@ static int __sec_nfc_probe(struct device *dev)
 	ret = gpio_request(pdata->pvdd_en, "ldo_en");
 	if (ret < 0) {
 		pr_err("failed to request about pvdd_en pin\n");
-		goto err_dev_reg;
+		goto err_gpio_ven;
 	}
 	if (!is_charging_mode)
 		gpio_direction_output(pdata->pvdd_en, NFC_I2C_LDO_ON);
@@ -979,7 +980,7 @@ static int __sec_nfc_probe(struct device *dev)
 
 	ret = gpio_request(pdata->ven, "nfc_ven");
 	if (ret) {
-		dev_err(dev, "failed to get gpio ven\n");
+		dev_err(dev, "failed to get gpio ven: %d\n", ret);
 		goto err_gpio_ven;
 	}
 	if (!is_charging_mode)
@@ -1021,8 +1022,9 @@ err_gpio_firm:
 err_gpio_ven:
 #ifdef CONFIG_SEC_NFC_DEDICATED_CLK
 	iounmap(info->clkctrl);
-err_iomap:
 #endif
+	/* Unlink before kfree(info), or misc_list keeps a freed entry. */
+	misc_deregister(&info->miscdev);
 err_dev_reg:
 	mutex_destroy(&info->mutex);
 	kfree(info);
@@ -1077,22 +1079,35 @@ typedef struct i2c_driver sec_nfc_driver_type;
 static int sec_nfc_probe(struct i2c_client *client,
                             const struct i2c_device_id *id)
 {
+	struct sec_nfc_info *info;
 	int ret = 0;
 
 	ret = __sec_nfc_probe(&client->dev);
 	if (ret)
 		return ret;
 
-	if (sec_nfc_i2c_probe(client))
-		__sec_nfc_remove(&client->dev);
+	/*
+	 * __sec_nfc_remove() would free an IRQ that was never requested and
+	 * leave the driver bound to freed data; undo __sec_nfc_probe() instead.
+	 */
+	ret = sec_nfc_i2c_probe(client);
+	if (ret) {
+		info = dev_get_drvdata(&client->dev);
+		misc_deregister(&info->miscdev);
+		if (info->pdata->firm)
+			gpio_free(info->pdata->firm);
+		gpio_free(info->pdata->ven);
+		mutex_destroy(&info->mutex);
+		kfree(info);
+	}
 
 	return ret;
 }
 
-static int sec_nfc_remove(struct i2c_client *client)
+static void sec_nfc_remove(struct i2c_client *client)
 {
 	sec_nfc_i2c_remove(&client->dev);
-	return __sec_nfc_remove(&client->dev);
+	__sec_nfc_remove(&client->dev);
 }
 #else /* CONFIG_SEC_NFC_IF_I2C */
 MODULE_DEVICE_TABLE(platform, sec_nfc_id_table);

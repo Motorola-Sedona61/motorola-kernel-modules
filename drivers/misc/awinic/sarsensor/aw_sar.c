@@ -2012,7 +2012,7 @@ err_malloc:
 	return ret;
 }
 
-static int32_t aw_sar_i2c_remove(struct i2c_client *i2c)
+static void aw_sar_i2c_remove(struct i2c_client *i2c)
 {
 	struct aw_sar *p_sar  = i2c_get_clientdata(i2c);
 
@@ -2038,8 +2038,6 @@ static int32_t aw_sar_i2c_remove(struct i2c_client *i2c)
 	aw_sar_sensor_free(p_sar);
 
 	AWLOGI(p_sar->dev, "aw_sar_i2c_remove ok!");
-
-	return 0;
 }
 
 static int aw_sar_suspend(struct device *dev)

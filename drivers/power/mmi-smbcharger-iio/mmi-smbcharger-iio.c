@@ -3327,11 +3327,16 @@ vote_now:
 
 static int mmi_set_qg_iterm(struct smb_mmi_charger *chip, int qg_iterm)
 {
+	/* Probe leaves batt_psy NULL when using the native battery supply. */
+	struct power_supply *psy = chip->batt_psy ?: chip->qcom_psy;
 	int rc = 0;
 	int fcc = 0;
 	union power_supply_propval val;
 
-	rc = power_supply_get_property(chip->batt_psy,
+	if (!psy)
+		return -ENODEV;
+
+	rc = power_supply_get_property(psy,
 			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT, &val);
 	if (rc < 0) {
 		mmi_err(chip, "Couldn't get batt FCC, rc=%d\n", rc);
@@ -4570,7 +4575,7 @@ static int batt_get_prop(struct power_supply *psy,
 				}
 			}
 		}
-		/* Fall through */
+		fallthrough;
 	default:
 		rc = power_supply_get_property(chip->qcom_psy, psp, val);
 		if (rc < 0) {
@@ -4927,7 +4932,7 @@ static int parse_mmi_dual_dt(struct smb_mmi_charger *chg)
 
 static int smb_mmi_chg_config_init(struct smb_mmi_charger *chip)
 {
-	int subtype = (u8)of_device_get_match_data(chip->dev);
+	int subtype = (uintptr_t)of_device_get_match_data(chip->dev);
 
 	switch (subtype) {
 	case PM8150B:
@@ -5198,8 +5203,8 @@ static int mmi_smbcharger_iio_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
-static int mmi_smbcharger_iio_of_xlate(struct iio_dev *indio_dev,
-				const struct of_phandle_args *iiospec)
+static int mmi_smbcharger_iio_fwnode_xlate(struct iio_dev *indio_dev,
+				const struct fwnode_reference_args *iiospec)
 {
 	struct smb_mmi_charger *chip = iio_priv(indio_dev);
 	struct iio_chan_spec *iio_chan = chip->iio_chan;
@@ -5216,7 +5221,7 @@ static int mmi_smbcharger_iio_of_xlate(struct iio_dev *indio_dev,
 static const struct iio_info mmi_smbcharger_iio_info = {
 	.read_raw	= mmi_smbcharger_iio_read_raw,
 	.write_raw	= mmi_smbcharger_iio_write_raw,
-	.of_xlate	= mmi_smbcharger_iio_of_xlate,
+	.fwnode_xlate	= mmi_smbcharger_iio_fwnode_xlate,
 };
 
 static int smb_mmi_init_iio_psy(struct smb_mmi_charger *chip,

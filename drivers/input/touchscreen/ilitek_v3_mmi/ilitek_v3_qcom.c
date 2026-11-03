@@ -21,6 +21,7 @@
  */
 
 #include "ilitek_v3.h"
+#include <linux/soc/qcom/panel_event_notifier.h>
 #if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 #include <linux/mmi_device.h>
 #endif
@@ -560,8 +561,9 @@ int ili_sysfs_remove_device(struct device *dev)
 #elif SUSPEND_RESUME_SUPPORT
 
 #if defined(CONFIG_FB) || defined(CONFIG_DRM)
-#if defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)
+#if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
 static struct drm_panel *active_panel;
+static void *panel_cookie;
 
 static int ili_v3_drm_check_dt(struct device_node *np)
 {
@@ -591,39 +593,29 @@ static int ili_v3_drm_check_dt(struct device_node *np)
 	}
 
 	ILI_ERR("no find drm_panel");
-	return -ENODEV;
+	return -EPROBE_DEFER;
 }
 
-static int drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
+static void drm_notifier_callback(enum panel_event_notifier_tag tag,
+        struct panel_event_notification *notification, void *client_data)
 {
-	struct drm_panel_notifier *evdata = data;
-	int *blank = NULL;
+    bool early;
 
-	if (!evdata) {
-		ILI_ERR("evdata is null");
-		return 0;
-	}
-
-	if (!((event == DRM_PANEL_EARLY_EVENT_BLANK)
-			|| (event == DRM_PANEL_EVENT_BLANK))) {
-		ILI_INFO("event(%lu) do not need process\n", event);
-		return 0;
-	}
-
-	blank = evdata->data;
-	ILI_DBG("DRM event:%lu,blank:%d", event, *blank);
-	switch (*blank) {
-	case DRM_PANEL_BLANK_UNBLANK:
-		if (DRM_PANEL_EARLY_EVENT_BLANK == event) {
-			ILI_INFO("resume: event = %lu, not care\n", event);
-		} else if (DRM_PANEL_EVENT_BLANK == event) {
-			ILI_INFO("resume: event = %lu, TP_RESUME\n", event);
+    if (!notification)
+        return;
+    early = notification->notif_data.early_trigger;
+	switch (notification->notif_type) {
+	case DRM_PANEL_EVENT_UNBLANK:
+		if (early) {
+			ILI_INFO("resume: early = %d, not care\n", early);
+		} else if (!early) {
+			ILI_INFO("resume: early = %d, TP_RESUME\n", early);
 		if (ili_sleep_handler(TP_RESUME) < 0)
 			ILI_ERR("TP resume failed\n");
 		}
 		break;
-	case DRM_PANEL_BLANK_POWERDOWN:
-		if (DRM_PANEL_EARLY_EVENT_BLANK == event) {
+	case DRM_PANEL_EVENT_BLANK:
+		if (early) {
 #ifdef ILI_DOUBLE_TAP_CTRL
 			if (ilits->should_enable_gesture) {
 				ILI_INFO("TP suspend: tap gesture suspend\n");
@@ -634,7 +626,7 @@ static int drm_notifier_callback(struct notifier_block *self, unsigned long even
 #endif
 			}
 			else {
-				ILI_INFO("TP suspend: TP_DEEP_SLEEP event = %lu\n", event);
+				ILI_INFO("TP suspend: TP_DEEP_SLEEP early = %d\n", early);
 				if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
 					ILI_ERR("TP suspend deep sleep fail\n");
 #ifdef ILI_SET_TOUCH_STATE
@@ -644,20 +636,19 @@ static int drm_notifier_callback(struct notifier_block *self, unsigned long even
 					gpio_set_value(ilits->tp_rst, 0);
 			}
 #else //ILI_DOUBLE_TAP_CTRL
-			ILI_INFO("TP suspend: event = %lu, TP_DEEP_SLEEP\n", event);
+			ILI_INFO("TP suspend: early = %d, TP_DEEP_SLEEP\n", early);
 			if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
 				ILI_ERR("TP suspend deep sleep failed\n");
 #endif //ILI_DOUBLE_TAP_CTRL
-		} else if (DRM_PANEL_EVENT_BLANK == event) {
-			ILI_INFO("suspend: event = %lu, not care\n", event);
+		} else if (!early) {
+			ILI_INFO("suspend: early = %d, not care\n", early);
 		}
 		break;
 	default:
-		ILI_DBG("DRM BLANK(%d) do not need process\n", *blank);
+		ILI_DBG("DRM BLANK(%d) do not need process\n", notification->notif_type);
 		break;
 	}
 
-	return 0;
 }
 #else
 static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long event, void *data)
@@ -730,7 +721,7 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 	}
 	return NOTIFY_OK;
 }
-#endif/*defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)*/
+#endif/*IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)*/
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 static void ilitek_plat_early_suspend(struct early_suspend *h)
 {
@@ -896,12 +887,16 @@ static void ilitek_plat_sleep_init(void)
 	return;
 #elif defined(CONFIG_FB) || defined(CONFIG_DRM)
 	ILI_INFO("Init notifier_fb struct\n");
-#if defined(__DRM_PANEL_H__)
-	ilits->notifier_fb.notifier_call = drm_notifier_callback;
-	if (active_panel) {
-		if (drm_panel_notifier_register(active_panel, &ilits->notifier_fb))
-		ILI_ERR("[DRM]drm_panel_notifier_register fail\n");
-	}
+#if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
+    if (active_panel) {
+        panel_cookie = panel_event_notifier_register(PANEL_EVENT_NOTIFICATION_PRIMARY,
+                PANEL_EVENT_NOTIFIER_CLIENT_PRIMARY_TOUCH, active_panel,
+                drm_notifier_callback, ilits);
+        if (IS_ERR(panel_cookie)) {
+            ILI_ERR("panel event notifier registration failed: %ld\n", PTR_ERR(panel_cookie));
+            panel_cookie = NULL;
+        }
+    }
 #else
 	ilits->notifier_fb.notifier_call = ilitek_plat_notifier_fb;
 #if defined(CONFIG_DRM_MSM)
@@ -917,7 +912,7 @@ static void ilitek_plat_sleep_init(void)
 		ILI_ERR("Unable to register notifier_fb\n");
 #endif /* CONFIG_PLAT_SPRD */
 #endif /* CONFIG_DRM_MSM */
-#endif/*defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)*/
+#endif/*IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)*/
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	ILI_INFO("Init eqarly_suspend struct\n");
 	ilits->early_suspend.suspend = ilitek_plat_early_suspend;
@@ -941,7 +936,7 @@ static int ilitek_plat_probe(void)
 	static bool initialized_sensor;
 #endif
 #if SUSPEND_RESUME_SUPPORT
-#if defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)
+#if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
 	int ret = 0;
 #endif
 #endif
@@ -958,7 +953,7 @@ static int ilitek_plat_probe(void)
 #endif
 
 #if SUSPEND_RESUME_SUPPORT
-#if defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)
+#if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
 	ret = ili_v3_drm_check_dt(ilits->dev->of_node);
 	if (ret) {
 		ILI_ERR("[ili_v3_drm_check_dt] parse drm-panel fail");
@@ -1039,6 +1034,12 @@ static int ilitek_tp_pm_resume(struct device *dev)
 static int ilitek_plat_remove(void)
 {
 	ILI_INFO("remove plat dev\n");
+#if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
+    if (panel_cookie) {
+        panel_event_notifier_unregister(panel_cookie);
+        panel_cookie = NULL;
+    }
+#endif
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
 	if (ilits && mtk_disp_notifier_unregister(&ilits->disp_notifier))
 		ILI_ERR("Error unregistering disp_notifier\n");
@@ -1094,7 +1095,7 @@ static void __exit ilitek_plat_dev_exit(void)
 	ili_dev_remove(ENABLE);
 }
 
-#if defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)
+#if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER)
 late_initcall(ilitek_plat_dev_init);
 #else
 module_init(ilitek_plat_dev_init);

@@ -38,3 +38,6 @@ KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/$(GKI_OBJ_MODUL
 
 obj-m += sx937x_sar.o
 
+
+# Out-of-tree fogos build: no ANDROID_BUILD_TOP layout.
+EXTRA_CFLAGS += -I$(src)/../../../include -I$(srctree)/drivers/base

@@ -930,7 +930,7 @@ const struct seq_operations selftest_seq_ops = {
 
 static int32_t selftest_proc_open(struct inode *inode, struct file *file)
 {
-    struct chipone_ts_data *cts_data = PDE_DATA(inode);
+    struct chipone_ts_data *cts_data = pde_data(inode);
     struct cts_oem_data *oem_data = NULL;
     int ret;
 
@@ -1038,7 +1038,7 @@ static int cts_rawdata_show(struct seq_file *m, void *v)
 }
 static int cts_rawdata_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, cts_rawdata_show, PDE_DATA(inode));
+    return single_open(file, cts_rawdata_show, pde_data(inode));
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
@@ -1089,7 +1089,7 @@ static int cts_diffdata_show(struct seq_file *m, void *v)
 }
 static int cts_diffdata_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, cts_diffdata_show, PDE_DATA(inode));
+    return single_open(file, cts_diffdata_show, pde_data(inode));
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
@@ -1140,7 +1140,7 @@ static int cts_manual_show(struct seq_file *m, void *v)
 }
 static int cts_manual_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, cts_manual_show, PDE_DATA(inode));
+    return single_open(file, cts_manual_show, pde_data(inode));
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
@@ -1225,7 +1225,7 @@ static int cts_limit_show(struct seq_file *m, void *v)
 }
 static int cts_limit_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, cts_limit_show, PDE_DATA(inode));
+    return single_open(file, cts_limit_show, pde_data(inode));
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
@@ -1550,7 +1550,7 @@ static int cts_factory_test_show(struct seq_file *m, void *v)
 }
 static int cts_factory_test_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, cts_factory_test_show, PDE_DATA(inode));
+    return single_open(file, cts_factory_test_show, pde_data(inode));
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
