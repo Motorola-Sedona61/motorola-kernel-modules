@@ -438,7 +438,10 @@ static inline bool pd_process_timer_msg(
 		if (PE_MAKE_STATE_TRANSIT_SINGLE(
 			PE_SNK_CHUNK_RECEIVED, PE_SNK_SEND_NOT_SUPPORTED))
 			return true;
-		/* fall through */
+#if defined(CONFIG_USB_PD_REV30_COLLISION_AVOID) && \
+	defined(CONFIG_USB_PD_REV30_SNK_FLOW_DELAY_STARTUP)
+		fallthrough;
+#endif
 #ifdef CONFIG_USB_PD_REV30_COLLISION_AVOID
 #ifdef CONFIG_USB_PD_REV30_SNK_FLOW_DELAY_STARTUP
 	case PD_TIMER_SNK_FLOW_DELAY:

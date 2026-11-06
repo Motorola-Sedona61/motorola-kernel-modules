@@ -1821,6 +1821,8 @@ static int mmi_discrete_dc_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		rc = vote(chip->dc_suspend_votable, WBC_VOTER,
 			(bool)val->intval, 0);
+		/* As on 5.4: also apply the DC current limit. */
+		fallthrough;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		rc = set_prop_dc_current_max(chip, val);
 		break;

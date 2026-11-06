@@ -1632,7 +1632,11 @@ err_regmap_init:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void rt1711_i2c_remove(struct i2c_client *client)
+#else
 static int rt1711_i2c_remove(struct i2c_client *client)
+#endif
 {
 	struct rt1711_chip *chip = i2c_get_clientdata(client);
 
@@ -1644,7 +1648,9 @@ static int rt1711_i2c_remove(struct i2c_client *client)
 		rt1711_regmap_deinit(chip);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM

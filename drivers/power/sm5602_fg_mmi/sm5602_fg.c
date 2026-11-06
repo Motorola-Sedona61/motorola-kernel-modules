@@ -15,6 +15,7 @@
 
 #define pr_fmt(fmt)	"[sm5602] %s(%d): " fmt, __func__, __LINE__
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/param.h>
 #include <linux/jiffies.h>
 #include <linux/workqueue.h>
@@ -2913,7 +2914,11 @@ err_0:
 }
 
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void sm_fg_remove(struct i2c_client *client)
+#else
 static int sm_fg_remove(struct i2c_client *client)
+#endif
 {
 	struct sm_fg_chip *sm = i2c_get_clientdata(client);
 
@@ -2924,7 +2929,9 @@ static int sm_fg_remove(struct i2c_client *client)
 
 	debugfs_remove_recursive(sm->debug_root);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 
 }
 

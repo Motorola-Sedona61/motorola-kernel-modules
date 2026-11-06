@@ -28,6 +28,11 @@
 #include "mmi_charger_core.h"
 #include "mmi_charger_core_iio.h"
 #include <linux/power_supply.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#include <linux/qti_power_supply.h>
+#define POWER_SUPPLY_TYPE_USB_HVDCP_3P5	QTI_POWER_SUPPLY_TYPE_USB_HVDCP_3P5
+#endif
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/of.h>

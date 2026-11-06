@@ -3644,7 +3644,11 @@ error_out:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void sgm4154x_charger_remove(struct i2c_client *client)
+#else
 static int sgm4154x_charger_remove(struct i2c_client *client)
+#endif
 {
 	struct sgm4154x_device *sgm= i2c_get_clientdata(client);
 
@@ -3659,7 +3663,9 @@ static int sgm4154x_charger_remove(struct i2c_client *client)
 
 	mutex_destroy(&sgm->lock);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
     return 0;
+#endif
 }
 
 static void sgm4154x_charger_shutdown(struct i2c_client *client)

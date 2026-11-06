@@ -1124,7 +1124,11 @@ err_init_dev:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void sgm7220_i2c_remove(struct i2c_client *client)
+#else
 static int sgm7220_i2c_remove(struct i2c_client *client)
+#endif
 {
 	struct sgm7220_chip *chip = i2c_get_clientdata(client);
 
@@ -1135,7 +1139,9 @@ static int sgm7220_i2c_remove(struct i2c_client *client)
 		device_remove_file(&client->dev, &dev_attr_chip_info);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM

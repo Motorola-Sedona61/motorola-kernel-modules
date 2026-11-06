@@ -13,6 +13,7 @@
 #include <linux/power_supply.h>
 #include "mmi_discrete_charger_iio.h"
 #include <linux/version.h>
+#include <linux/property.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
 #include <linux/qti_power_supply.h>
 #endif
@@ -130,8 +131,13 @@ static int mmi_discrete_iio_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+static int mmi_discrete_iio_fwnode_xlate(struct iio_dev *indio_dev,
+				const struct fwnode_reference_args *iiospec)
+#else
 static int mmi_discrete_iio_of_xlate(struct iio_dev *indio_dev,
 				const struct of_phandle_args *iiospec)
+#endif
 {
 	struct mmi_discrete_charger *chip = iio_priv(indio_dev);
 	struct iio_chan_spec *iio_chan = chip->iio_chan;
@@ -148,7 +154,11 @@ static int mmi_discrete_iio_of_xlate(struct iio_dev *indio_dev,
 static const struct iio_info mmi_discrete_iio_info = {
 	.read_raw	= mmi_discrete_iio_read_raw,
 	.write_raw	= mmi_discrete_iio_write_raw,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+	.fwnode_xlate	= mmi_discrete_iio_fwnode_xlate,
+#else
 	.of_xlate	= mmi_discrete_iio_of_xlate,
+#endif
 };
 
 int mmi_discrete_init_iio_psy(struct mmi_discrete_charger *chip,

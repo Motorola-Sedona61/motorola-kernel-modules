@@ -291,6 +291,8 @@ static void usb_dwork_handler(struct work_struct *work)
 			   val.intval != POWER_SUPPLY_TYPE_USB_FLOAT)
 #endif
 			break;
+		/* A data-capable port type: start the peripheral. */
+		fallthrough;
 	case DR_HOST_TO_DEVICE:
 		stop_usb_host(rpmd);
 		start_usb_peripheral(rpmd);

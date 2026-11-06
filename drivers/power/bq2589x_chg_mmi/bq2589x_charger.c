@@ -37,6 +37,9 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
 #include <linux/qti_power_supply.h>
+/* The QC3 turbo paths use the pre-5.15 type names. */
+#define POWER_SUPPLY_TYPE_USB_HVDCP_3	QTI_POWER_SUPPLY_TYPE_USB_HVDCP_3
+#define POWER_SUPPLY_TYPE_USB_HVDCP_3P5	QTI_POWER_SUPPLY_TYPE_USB_HVDCP_3P5
 #endif
 
 #ifdef __indicator_led_en__
@@ -1624,7 +1627,7 @@ int bq2589x_get_usb_present(struct bq2589x *bq)
 	return ret;
 }
 
-static bq2589x_reuqest_dpdm(struct bq2589x *bq, bool enable)
+static int bq2589x_reuqest_dpdm(struct bq2589x *bq, bool enable)
 {
 	int ret = 0;
 
@@ -2402,6 +2405,8 @@ static void bq2589x_adapter_in_func(struct bq2589x *bq)
 			break;
 		case BQ2589X_VBUS_UNKNOWN:
 			dev_err(bq->dev, "%s:Unkown adpater plugged in\n", __func__);
+			/* Treat unknown adapters as non-standard (float). */
+			fallthrough;
 		case BQ2589X_VBUS_NONSTAND:
 			dev_info(bq->dev, "%s:NON STAND plugged in\n", __func__);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
@@ -3568,9 +3573,11 @@ static void bq2589x_charger_shutdown(struct i2c_client *client)
 	devm_free_irq(&client->dev, client->irq, bq);
 
 	/*release charging enable gpio to avoid power leakage.*/
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)
 	if(gpio_is_valid(bq->chg_en_gpio)){
 		devm_gpio_free(&client->dev, bq->chg_en_gpio);
 	}
+#endif
 	g_bq = NULL;
 }
 

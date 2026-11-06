@@ -51,7 +51,8 @@ enum {
 	MMI_POWER_SUPPLY_DONOT_IGNORE_REQUEST_DPDM = 4,
 };
 
-enum mmi_qc3p_power {
+/* Untagged: Linux 6.1 qti_power_supply.h already defines enum mmi_qc3p_power. */
+enum {
 	MMI_POWER_SUPPLY_QC3P_NONE,
 #ifdef CONFIG_MMI_QC3P_WT6670_DETECTED
 	MMI_POWER_SUPPLY_QC3P_18W = 0x8,

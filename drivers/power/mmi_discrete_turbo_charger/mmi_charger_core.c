@@ -38,6 +38,8 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/module.h>
+#include <linux/version.h>
+#include <linux/property.h>
 #include <linux/platform_device.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
@@ -150,6 +152,8 @@ static int mmi_charger_iio_write_raw(struct iio_dev *indio_dev,
 			else if (chip->qc3p_active)
 				mmi_qc3p_chrg_enable_all_cp(chip, val1);
 		}
+		/* As on 5.4: enabling the charge pumps also (re)starts the QC3+ policy. */
+		fallthrough;
 	case PSY_IIO_QC3P_START_POLICY:
 		start_qc3p_policy(chip);
 		break;
@@ -194,8 +198,13 @@ static int mmi_charger_iio_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+static int mmi_charger_iio_fwnode_xlate(struct iio_dev *indio_dev,
+				const struct fwnode_reference_args *iiospec)
+#else
 static int mmi_charger_iio_of_xlate(struct iio_dev *indio_dev,
 				const struct of_phandle_args *iiospec)
+#endif
 {
 	struct mmi_charger_manager *chip = iio_priv(indio_dev);
 	struct iio_chan_spec *iio_chan = chip->iio_chan;
@@ -212,7 +221,11 @@ static int mmi_charger_iio_of_xlate(struct iio_dev *indio_dev,
 static const struct iio_info mmi_charger_iio_info = {
 	.read_raw	= mmi_charger_iio_read_raw,
 	.write_raw	= mmi_charger_iio_write_raw,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+	.fwnode_xlate	= mmi_charger_iio_fwnode_xlate,
+#else
 	.of_xlate	= mmi_charger_iio_of_xlate,
+#endif
 };
 
 static int mmi_charger_init_iio_psy(struct mmi_charger_manager *chip,

@@ -18,6 +18,8 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/version.h>
+#include <linux/property.h>
 #include <linux/power_supply.h>
 #include <linux/slab.h>
 #include <linux/kernel.h>
@@ -39,6 +41,16 @@
 #include "bq2597x_charger_iio.h"
 #include <linux/gpio.h>
 #include <linux/iio/consumer.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+/*
+ * The register helpers below are static and only the separate bq2597x_mmi
+ * copy of this driver calls them, so 6.1 modpost rejects their exports.
+ */
+#undef EXPORT_SYMBOL_GPL
+#define EXPORT_SYMBOL_GPL(sym) \
+	static const void *const __maybe_unused __bq2597x_keep_##sym = &sym
+#endif
 
 #ifdef pr_debug
 #undef pr_debug
@@ -2063,8 +2075,13 @@ static int bq2597x_iio_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+static int bq2597x_iio_fwnode_xlate(struct iio_dev *indio_dev,
+				const struct fwnode_reference_args *iiospec)
+#else
 static int bq2597x_iio_of_xlate(struct iio_dev *indio_dev,
 				const struct of_phandle_args *iiospec)
+#endif
 {
 	struct bq2597x *bq = iio_priv(indio_dev);
 	struct iio_chan_spec *iio_chan = bq->iio_chan;
@@ -2081,7 +2098,11 @@ static int bq2597x_iio_of_xlate(struct iio_dev *indio_dev,
 static const struct iio_info bq2597x_iio_info = {
 	.read_raw	= bq2597x_iio_read_raw,
 	.write_raw	= bq2597x_iio_write_raw,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+	.fwnode_xlate	= bq2597x_iio_fwnode_xlate,
+#else
 	.of_xlate	= bq2597x_iio_of_xlate,
+#endif
 };
 
 static int bq2597x_init_iio_psy(struct bq2597x *chip)
@@ -2602,7 +2623,11 @@ static int bq2597x_resume(struct device *dev)
 
 	return 0;
 }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void bq2597x_charger_remove(struct i2c_client *client)
+#else
 static int bq2597x_charger_remove(struct i2c_client *client)
+#endif
 {
 	struct bq2597x *bq = i2c_get_clientdata(client);
 
@@ -2623,7 +2648,9 @@ static int bq2597x_charger_remove(struct i2c_client *client)
 	sysfs_remove_group(&bq->dev->kobj, &bq2597x_attr_group);
 	sysfs_remove_group(&(bq->client->dev.kobj), &bq2597x_attribute_group);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 static void bq2597x_charger_shutdown(struct i2c_client *client)
