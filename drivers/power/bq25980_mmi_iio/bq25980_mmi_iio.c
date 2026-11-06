@@ -8,6 +8,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/gpio/consumer.h>
 #include <linux/power_supply.h>
 #include <linux/regmap.h>
@@ -2365,8 +2366,13 @@ static int bq25980_iio_read_raw(struct iio_dev *indio_dev,
 	return IIO_VAL_INT;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+static int bq25980_iio_fwnode_xlate(struct iio_dev *indio_dev,
+				const struct fwnode_reference_args *iiospec)
+#else
 static int bq25980_iio_of_xlate(struct iio_dev *indio_dev,
 				const struct of_phandle_args *iiospec)
+#endif
 {
 	struct bq25980_device *bq = iio_priv(indio_dev);
 	struct iio_chan_spec *iio_chan = bq->iio_chan;
@@ -2383,7 +2389,11 @@ static int bq25980_iio_of_xlate(struct iio_dev *indio_dev,
 static const struct iio_info bq25980_iio_info = {
 	.read_raw	= bq25980_iio_read_raw,
 	.write_raw	= bq25980_iio_write_raw,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+	.fwnode_xlate	= bq25980_iio_fwnode_xlate,
+#else
 	.of_xlate	= bq25980_iio_of_xlate,
+#endif
 };
 
 static int bq25980_init_iio_psy(struct bq25980_device *bq)
@@ -2610,7 +2620,11 @@ free_mem:
 	devm_kfree(bq->dev, bq);
 	return ret;
 }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void bq25980_charger_remove(struct i2c_client *client)
+#else
 static int bq25980_charger_remove(struct i2c_client *client)
+#endif
 {
 	struct bq25980_device *bq = i2c_get_clientdata(client);
 
@@ -2622,7 +2636,9 @@ static int bq25980_charger_remove(struct i2c_client *client)
 	mutex_destroy(&bq->irq_complete);
 
 	dev_err(bq->dev,"remove Successfully\n");
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 
