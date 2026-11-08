@@ -405,10 +405,24 @@ static void ts_mmi_worker_func(struct work_struct *w)
 			if (!atomic_read(&touch_cdev->touch_stopped))
 				break;
 
-			ts_mmi_queued_power_on(touch_cdev);
+			/* 6.1 performs power and pinctrl transitions in panel events. */
+			if (NEED_TO_SET_POWER) {
+				TRY_TO_CALL(power, TS_MMI_POWER_ON);
+			} else if (touch_cdev->pdata.reset && touch_cdev->mdata->reset) {
+				TRY_TO_CALL(reset, TS_MMI_RESET_HARD);
+			}
+			if (NEED_TO_SET_PINCTRL) {
+				TRY_TO_CALL(pinctrl, TS_MMI_PINCTL_ON);
+			}
+			atomic_set(&touch_cdev->resume_should_stop, 0);
 			ts_mmi_queued_resume(touch_cdev);
-			ts_mmi_queued_stop(touch_cdev);
-			ts_mmi_queued_power_off(touch_cdev);
+			ts_mmi_panel_off(touch_cdev);
+			if (NEED_TO_SET_PINCTRL) {
+				TRY_TO_CALL(pinctrl, TS_MMI_PINCTL_OFF);
+			}
+			if (NEED_TO_SET_POWER) {
+				TRY_TO_CALL(power, TS_MMI_POWER_OFF);
+			}
 
 			break;
 
