@@ -213,10 +213,12 @@ static void fb_notifier_callback(enum panel_event_notifier_tag tag,
 				g_cts_data->should_enable_gesture = false;
 			}
 #endif
+#ifdef CHIPONE_SET_TOUCH_STATE
 			if (g_cts_data->should_enable_gesture)
 				touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
 			else
 				touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
+#endif
 #endif
 			cts_suspend(cts_data);
 		}
