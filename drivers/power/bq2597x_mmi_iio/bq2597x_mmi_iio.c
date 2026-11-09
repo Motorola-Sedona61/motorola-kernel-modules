@@ -100,13 +100,13 @@ enum {
 #define	TS_BUS_FAULT		BIT(1)
 #define	TS_DIE_FAULT		BIT(0)
 
-/*below used for comm with other module*/
-#define	BAT_OVP_FAULT_SHIFT			8
-#define	BAT_OCP_FAULT_SHIFT			9
-#define	BUS_OVP_FAULT_SHIFT			10
-#define	BUS_OCP_FAULT_SHIFT			11
-#define	BAT_THERM_FAULT_SHIFT			12
-#define	BUS_THERM_FAULT_SHIFT			13
+/* Match mmi_discrete_turbo_charger/mmi_charger_class.h status bits. */
+#define	BAT_OVP_FAULT_SHIFT			6
+#define	BAT_OCP_FAULT_SHIFT			7
+#define	BUS_OVP_FAULT_SHIFT			9
+#define	BUS_OCP_FAULT_SHIFT			10
+#define	BAT_THERM_FAULT_SHIFT			14
+#define	BUS_THERM_FAULT_SHIFT			14
 #define	DIE_THERM_FAULT_SHIFT			14
 
 #define	BAT_OVP_FAULT_MASK		(1 << BAT_OVP_FAULT_SHIFT)
@@ -119,12 +119,16 @@ enum {
 
 #define	BAT_OVP_ALARM_SHIFT			0
 #define	BAT_OCP_ALARM_SHIFT			1
-#define	BUS_OVP_ALARM_SHIFT			2
-#define	BUS_OCP_ALARM_SHIFT			3
-#define	BAT_THERM_ALARM_SHIFT			4
-#define	BUS_THERM_ALARM_SHIFT			5
-#define	DIE_THERM_ALARM_SHIFT			6
-#define BAT_UCP_ALARM_SHIFT			7
+#define	BUS_OVP_ALARM_SHIFT			3
+#define	BUS_OCP_ALARM_SHIFT			4
+#define	BAT_THERM_ALARM_SHIFT			13
+#define	BUS_THERM_ALARM_SHIFT			13
+#define	DIE_THERM_ALARM_SHIFT			13
+#define BAT_UCP_ALARM_SHIFT			2
+
+/* Status bits consumed by the MMI charge-pump policy. */
+#define MMI_CONV_OCP_FAULT_SHIFT			12
+#define MMI_CP_SWITCH_SHIFT			18
 
 #define	BAT_OVP_ALARM_MASK		(1 << BAT_OVP_ALARM_SHIFT)
 #define	BAT_OCP_ALARM_MASK		(1 << BAT_OCP_ALARM_SHIFT)
@@ -1995,6 +1999,10 @@ static int bq2597x_iio_write_raw(struct iio_dev *indio_dev,
 		bq->bus_ovp_fault = false;
 		bq->bus_ocp_fault = false;
 		break;
+	case PSY_IIO_CP_STATUS1:
+		/* The MMI manager writes this channel to gate charge-pump ADCs. */
+		rc = bq2597x_enable_adc(bq, !!val1);
+		break;
 	default:
 		pr_err("Unsupported bq2597x IIO chan %d\n", chan->channel);
 		rc = -EINVAL;
@@ -2015,6 +2023,7 @@ static int bq2597x_iio_read_raw(struct iio_dev *indio_dev,
 	struct bq2597x *bq = iio_priv(indio_dev);
 	int rc = 0;
 	int result;
+	u8 conv_stat;
 	*val1 = 0;
 
 	switch (chan->channel) {
@@ -2041,6 +2050,10 @@ static int bq2597x_iio_read_raw(struct iio_dev *indio_dev,
 		*val1 = bq->ibus_curr;
 		break;
 	case PSY_IIO_CP_STATUS1:
+		/* Report the hardware switching state, not just charge-enable. */
+		rc = bq2597x_read_byte(bq, BQ2597X_REG_0A, &conv_stat);
+		if (rc)
+			break;
 		bq2597x_check_alarm_status(bq);
 		bq2597x_check_fault_status(bq);
 		*val1 = ((bq->bat_ovp_alarm << BAT_OVP_ALARM_SHIFT)
@@ -2057,7 +2070,13 @@ static int bq2597x_iio_read_raw(struct iio_dev *indio_dev,
 			| (bq->bus_ocp_fault << BUS_OCP_FAULT_SHIFT)
 			| (bq->bat_therm_fault << BAT_THERM_FAULT_SHIFT)
 			| (bq->bus_therm_fault << BUS_THERM_FAULT_SHIFT)
-			| (bq->die_therm_fault << DIE_THERM_FAULT_SHIFT));
+			| (bq->die_therm_fault << DIE_THERM_FAULT_SHIFT)
+			| (!!(conv_stat & BQ2597X_CONV_OCP_FLAG_MASK)
+				<< MMI_CONV_OCP_FAULT_SHIFT)
+			| (!!(conv_stat & BQ2597X_TSHUT_STAT_MASK)
+				<< DIE_THERM_FAULT_SHIFT)
+			| (!!(conv_stat & BQ2597X_CONV_SWITCHING_STAT_MASK)
+				<< MMI_CP_SWITCH_SHIFT));
 		break;
 
 	default:
