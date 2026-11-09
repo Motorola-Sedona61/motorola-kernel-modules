@@ -3147,10 +3147,12 @@ static ssize_t gesture_store(struct device *dev,
         }
 
         switch (value) {
+                case 0x31: /* Motorola gesture command used by PowerHAL. */
                 case 1:
                         cts_data->s_tap_flag = 0;
                         cts_data->d_tap_flag = 1;
                         break;
+                case 0x30:
                 default:
                         cts_data->s_tap_flag = 0;
                         cts_data->d_tap_flag = 0;
